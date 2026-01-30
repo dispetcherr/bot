@@ -162,14 +162,14 @@ client.on('messageCreate', async message => {
                         { name: '🔗 Ссылка', value: `[Открыть](${SERVER_URL})`, inline: true },
                         { name: '🤖 Discord бот', value: statusData.discord_bot?.status === 'online' ? '🟢 Активен' : '🔴 Неактивен', inline: true }
                     )
-                    .setFooter({ text: 'RAT Control System | 28 команд доступно' });
+                    .setFooter({ text: 'Lua Rat | 28 команд доступно' });
                 
                 await message.reply({ embeds: [statusEmbed] });
                 break;
                 
             case 'help':
                 const helpEmbed = new EmbedBuilder()
-                    .setTitle('🤖 RAT Control Panel v3.2')
+                    .setTitle('🤖 Lua Rat Panel v3.2')
                     .setDescription('**Полный список всех команд с поддержкой таргетинга**')
                     .setColor(0x7289da)
                     .addFields(
